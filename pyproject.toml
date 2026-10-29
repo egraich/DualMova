@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dualmova"
+version = "1.0.0"
+description = "A dual-norm NLP data engine and corpus builder for Belarusian (Narkamaŭka & Taraškievica)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "ZorkaLabs AI Research", email = "research@zorkalabs.org" }
+]
+keywords = [
+    "belarusian",
+    "nlp",
+    "llm",
+    "orthography",
+    "tarashkievica",
+    "narkamauka",
+    "datasets",
+    "contrastive-learning"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic"
+]
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "ftfy>=6.1.1",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ZorkaLabs/dualmova"
+Repository = "https://github.com/ZorkaLabs/dualmova"
+Datasets = "https://huggingface.co/ZorkaLabs/belarusian-dualnorm-corpus-v1"

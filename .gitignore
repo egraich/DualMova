@@ -1,0 +1,47 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# Large datasets, raw artifacts & export formats (hosted externally on Hugging Face)
+data/
+raw/
+processed/
+corpus/
+export/
+dumps/
+pipeline/raw_html/
+pipeline/processed/
+pipeline/export/
+pipeline/dumps/
+*.bz2
+*.parquet
+*.jsonl
+*.arrow
+*.tar
+*.zip
+
+# Local evaluation & calibration suites (private offline benchmarks)
+eval/
+
+# Temporary caches, runtime logs & progress trackers
+logs/
+*.log
+pipeline/*.log
+*cache*.json
+*progress*.json
+*audit*.json
+*stats*.json
+
+# OS & Editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

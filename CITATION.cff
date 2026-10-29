@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use DualMova in your research or LLM fine-tuning, please cite it as below."
+authors:
+  - name: "ZorkaLabs AI Research"
+    website: "https://huggingface.co/ZorkaLabs"
+title: "DualMova: A Multi-Norm Data Engine and Contrastive Corpus for the Belarusian Language"
+version: 1.0.0
+date-released: 2026-10-20
+url: "https://github.com/ZorkaLabs/dualmova"
+repository-code: "https://github.com/ZorkaLabs/dualmova"
+keywords:
+  - belarusian
+  - nlp
+  - large-language-models
+  - orthography
+  - narkamauka
+  - tarashkievica
+  - contrastive-learning
+  - dataset
+license: Apache-2.0
+preferred-citation:
+  type: article
+  authors:
+    - name: "ZorkaLabs AI Research"
+  title: "DualMova: Dual-Norm Belarusian Language Processing Pipeline and Corpus"
+  year: 2026
+  url: "https://github.com/ZorkaLabs/dualmova"
