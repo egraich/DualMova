@@ -21,12 +21,12 @@ The DualMova v3.0 pipeline structures data ingestion, classification, and model 
 flowchart TD
     subgraph S1["Stage 1: Ingestion & Language Identification (LID)"]
         Raw["Raw Document Stream<br/>(knihi.com / Wikimedia Dumps)"] --> Parse["Layout & Encoding Normalizer<br/>(Selectolax / ftfy / NFKC)"]
-        Parse --> Typo["Canonical Typography<br/>(«Quotes», Em-Dash, Short-U Anchoring)"]
+        Parse --> Typo["Canonical Typography<br/>(Guillemets, Em-Dash, Short-U Anchoring)"]
         Typo --> LID{"LID Gatekeeper"}
-        LID -->|Russian Chars [и, щ, ъ]| RejRus["REJECT_RUSSIAN_CHARS"]
-        LID -->|Hidden Russian Phonology<br/>([жчшр][еёюя], [дт][еёюя], -ого/-его)| RejPhon["REJECT_RUSSIAN_PHONOLOGY"]
-        LID -->|Trasyanka / Belazar<br/>(толька, еслі, астаноўка, ', но ')| RejTras["REJECT_TRASIANKA_BELAZAR"]
-        LID -->|OCR Homoglyphs & Corruptions| RejOCR["REJECT_OCR"]
+        LID -->|Russian Letters: и, щ, ъ| RejRus["REJECT_RUSSIAN_CHARS"]
+        LID -->|Russian Phonology| RejPhon["REJECT_RUSSIAN_PHONOLOGY"]
+        LID -->|Trasyanka & Belazar| RejTras["REJECT_TRASIANKA_BELAZAR"]
+        LID -->|OCR Homoglyphs & Artifacts| RejOCR["REJECT_OCR"]
         LID -->|Authentic Belarusian| S2["Stage 2 Router"]
     end
 
@@ -38,14 +38,14 @@ flowchart TD
         EB & Laplace --> HierContext["Hierarchical Context L_ctx(i)"]
         
         LocalEval & HierContext --> ConflictGate{"Conflict-Aware Gate"}
-        ConflictGate -->|Concordant / Neutral<br/>L_local * L_ctx >= 0| ApplyFull["beta_eff = 1.0<br/>Full Prior Rescue"]
-        ConflictGate -->|Opposing Citation<br/>L_local * L_ctx < 0| ApplyDamped["beta_eff = 0.35 * exp(-|L|/2)<br/>Shield Embedded Citation"]
+        ConflictGate -->|Concordant or Neutral| ApplyFull["beta_eff = 1.0<br/>Full Prior Rescue"]
+        ConflictGate -->|Opposing Citation| ApplyDamped["beta_eff = 0.35 * exp(-abs(L)/2)<br/>Shield Embedded Citation"]
         
-        ApplyFull & ApplyDamped --> RoutingDecision{"Decision Threshold<br/>|L_final| >= 1.25?"}
-        RoutingDecision -->|L_final <= -1.25| Nark["&lt;orth_nark&gt;...&lt;/orth_nark&gt;"]
-        RoutingDecision -->|L_final >= +1.25| Taras["&lt;orth_taras&gt;...&lt;/orth_taras&gt;"]
-        RoutingDecision -->|Neutral |L_final| < 1.25| ZeroCheck{"Markers Present?"}
-        ZeroCheck -->|total_ev == 0| Inv["&lt;orth_invariant&gt;...&lt;/orth_invariant&gt;<br/>Certified Common Core"]
+        ApplyFull & ApplyDamped --> RoutingDecision{"Decision Threshold<br/>abs(L_final) >= 1.25?"}
+        RoutingDecision -->|Narkamaŭka score| Nark["Tag: orth_nark"]
+        RoutingDecision -->|Taraškievica score| Taras["Tag: orth_taras"]
+        RoutingDecision -->|Neutral score| ZeroCheck{"Markers Present?"}
+        ZeroCheck -->|total_ev == 0| Inv["Tag: orth_invariant<br/>Certified Common Core"]
         ZeroCheck -->|total_ev > 0| Amb["REJECT_AMBIGUOUS"]
     end
 
@@ -88,11 +88,11 @@ sequenceDiagram
     EB-->>G: Compute shrunk global prior L_doc_eb
     G->>G: Check local paragraph alignment (L_local * L_ctx)
     alt Neutral Paragraph (L_local = 0)
-        G-->>R: Apply beta = 1.0 (Full context rescue -> <orth_nark> or <orth_taras>)
-    else Opposing Embedded Quote (e.g., Narkamaŭka quote in Taraškievica book)
-        G-->>R: Apply beta = 0.35 * exp(-|L|/2) (Shield quote from context poisoning)
+        G-->>R: Apply beta = 1.0 (Rescue to orth_nark or orth_taras)
+    else Opposing Embedded Quote (e.g. Narkamaŭka quote in Taraškievica book)
+        G-->>R: Apply beta = 0.35 * exp(-abs(L)/2) (Shield quote from context poisoning)
     else Isolated Sentence (No book context & total_ev = 0)
-        G-->>R: Certify as Invariant Core (<orth_invariant>)
+        G-->>R: Certify as Invariant Core (orth_invariant)
     end
 ```
 

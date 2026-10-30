@@ -16,12 +16,12 @@ DualMova solves this by structuring the ingestion process into a **three-stage p
 flowchart TD
     subgraph S1["Stage 1: Ingestion & Language Identification (LID)"]
         Raw["Raw Document Stream<br/>(knihi.com / Wikimedia Dumps)"] --> Parse["HTML / Wiki Parser<br/>(Selectolax / XML Stream)"]
-        Parse --> Typo["Canonical Typography & NFKC<br/>(«Quotes», Em-Dash, Short-U Anchoring)"]
+        Parse --> Typo["Canonical Typography & NFKC<br/>(Guillemets, Em-Dash, Short-U Anchoring)"]
         Typo --> LID{"Stage 1 Filters"}
-        LID -->|Russian Letters<br/>[и, щ, ъ]| RejRus["REJECT_RUSSIAN_CHARS"]
-        LID -->|Russian Phonology<br/>(Hard C + Iotated, -ого/-его)| RejPhon["REJECT_RUSSIAN_PHONOLOGY"]
-        LID -->|Trasyanka / Belazar<br/>(толька, еслі, астаноўка)| RejTras["REJECT_TRASIANKA_BELAZAR"]
-        LID -->|OCR Artifacts<br/>(Latin Homoglyphs, Lost ў)| RejOCR["REJECT_OCR"]
+        LID -->|Russian Letters: и, щ, ъ| RejRus["REJECT_RUSSIAN_CHARS"]
+        LID -->|Russian Phonology| RejPhon["REJECT_RUSSIAN_PHONOLOGY"]
+        LID -->|Trasyanka & Belazar| RejTras["REJECT_TRASIANKA_BELAZAR"]
+        LID -->|OCR Homoglyphs & Artifacts| RejOCR["REJECT_OCR"]
         LID -->|Valid Authentic Belarusian| S2["Stage 2 Entry"]
     end
 
@@ -34,14 +34,14 @@ flowchart TD
         EB & Laplace --> CtxScore["Combined Context L_ctx(i)"]
         
         LocalScore & CtxScore --> Gate{"Conflict-Aware Gate"}
-        Gate -->|Concordant / Neutral<br/>L_local * L_ctx >= 0| Eff1["L_final = L_local + 1.0 * L_ctx"]
-        Gate -->|Code-Switching Citation<br/>L_local * L_ctx < 0| Eff2["L_final = L_local + beta_conflict * L_ctx"]
+        Gate -->|Concordant or Neutral| Eff1["L_final = L_local + 1.0 * L_ctx"]
+        Gate -->|Code-Switching Citation| Eff2["L_final = L_local + beta_conflict * L_ctx"]
         
-        Eff1 & Eff2 --> Decision{"Routing Decision<br/>|L_final| >= 1.25?"}
-        Decision -->|L_final <= -1.25| TagNark["Tag &lt;orth_nark&gt;"]
-        Decision -->|L_final >= +1.25| TagTaras["Tag &lt;orth_taras&gt;"]
-        Decision -->|Neutral |L_final| < 1.25| InvariantCheck{"Markers Present?<br/>total_ev == 0"}
-        InvariantCheck -->|Yes: total_ev == 0| TagInv["Tag &lt;orth_invariant&gt;<br/>Certified Invariant Core"]
+        Eff1 & Eff2 --> Decision{"Routing Decision<br/>abs(L_final) >= 1.25?"}
+        Decision -->|Narkamaŭka score| TagNark["Tag: orth_nark"]
+        Decision -->|Taraškievica score| TagTaras["Tag: orth_taras"]
+        Decision -->|Neutral score| InvariantCheck{"Markers Present?<br/>total_ev == 0"}
+        InvariantCheck -->|Yes: total_ev == 0| TagInv["Tag: orth_invariant<br/>Certified Invariant Core"]
         InvariantCheck -->|No: Weak Conflict| RejAmb["REJECT_AMBIGUOUS"]
     end
 
@@ -78,13 +78,13 @@ Before orthography routing, raw text must pass Stage 1 Language Identification t
 
 ```mermaid
 flowchart LR
-    Text["Raw Text Segment"] --> Chars{"Contains [и, щ, ъ]?"}
+    Text["Raw Text Segment"] --> Chars{"Contains Russian letters: и, щ, ъ?"}
     Chars -->|Yes| R1["REJECT_RUSSIAN_CHARS"]
-    Chars -->|No| Phon{"Russian Phonology?<br/>- [жчшр][еёюя]<br/>- [дт][еёюя]<br/>- [а-я]{2,}(ого|его)<br/>- Clitics (это, как, что)"}
+    Chars -->|No| Phon{"Russian Phonology?<br/>- Hard post-alveolars + iotated<br/>- Un-affricated dentals<br/>- Endings: -ого/-его<br/>- Russian clitics"}
     Phon -->|Yes| R2["REJECT_RUSSIAN_PHONOLOGY"]
-    Phon -->|No| Tras{"Trasyanka / Belazar?<br/>- толька, еслі, патаму<br/>- патом, дажэ, очэнь<br/>- астаноўка, ', но '"}
+    Phon -->|No| Tras{"Trasyanka / Belazar?<br/>- толька, еслі, патаму<br/>- патом, дажэ, очэнь<br/>- астаноўка, conjunction но"}
     Tras -->|Yes| R3["REJECT_TRASIANKA_BELAZAR"]
-    Tras -->|No| OCR{"OCR Corruptions?<br/>- Latin homoglyphs<br/>- Systematic 'ў' loss"}
+    Tras -->|No| OCR{"OCR Corruptions?<br/>- Latin homoglyphs<br/>- Systematic short-U loss"}
     OCR -->|Yes| R4["REJECT_OCR"]
     OCR -->|No| Pass["Passed to Stage 2 Router"]
 ```
@@ -163,8 +163,8 @@ flowchart TD
     end
 
     subgraph Laplace["Bidirectional Laplace Field (O(M) Linear Pass)"]
-        Forward["Forward Pass (Top-Down):<br/>F_i = gamma * (F_{i-1} + E_{i-1})"]
-        Backward["Backward Pass (Bottom-Up):<br/>B_i = gamma * (B_{i+1} + E_{i+1})"]
+        Forward["Forward Pass (Top-Down):<br/>F(i) = gamma * (F(i-1) + E(i-1))"]
+        Backward["Backward Pass (Bottom-Up):<br/>B(i) = gamma * (B(i+1) + E(i+1))"]
         Decay["Decay Constant:<br/>gamma = 0.65 (Half-life ~ 1.6 paras)"]
         NeighScore["Neighborhood Score:<br/>L_neigh(i) = 4.0 * R_neigh(i) * D_neigh(i)"]
         
@@ -177,9 +177,9 @@ flowchart TD
     end
 
     subgraph Gate["Conflict-Aware Gating"]
-        L_ctx & Local["L_local(i)"] --> DotCheck{"L_local * L_ctx >= 0?<br/>(Concordant or Neutral)"}
-        DotCheck -->|Yes: Agreement / Neutral| BetaOne["beta_eff = 1.0<br/>Full Prior Rescue"]
-        DotCheck -->|No: Code-Switching Quote| BetaDamp["beta_eff = 0.35 * exp(-|L_local| / 2.0)<br/>Shield Citation from Context Poisoning"]
+        L_ctx & Local["L_local(i)"] --> DotCheck{"Concordance Check:<br/>L_local * L_ctx >= 0?"}
+        DotCheck -->|Concordant or Neutral| BetaOne["beta_eff = 1.0<br/>Full Prior Rescue"]
+        DotCheck -->|Code-Switching Quote| BetaDamp["beta_eff = 0.35 * exp(-abs(L) / 2)<br/>Shield Citation from Context Poisoning"]
         BetaOne & BetaDamp --> L_final["L_final = L_local + beta_eff * L_ctx"]
     end
 ```
@@ -227,19 +227,19 @@ flowchart TD
 
     subgraph LLM_CPT["1. Continual Pretraining (CPT)"]
         Nark & Taras --> SectionPacking["Orthography-Segregated Packing<br/>(6,000 char windows by work)"]
-        Inv --> TagDropout["Tag Dropout Scheme:<br/>50% Untagged<br/>25% &lt;orth_nark&gt;<br/>25% &lt;orth_taras&gt;"]
+        Inv --> TagDropout["Tag Dropout Scheme:<br/>50% Untagged<br/>25% orth_nark<br/>25% orth_taras"]
         SectionPacking & TagDropout --> PackedOut["packed_pretrain.parquet<br/>(15,041 docs, 31.7 MB)"]
     end
 
     subgraph LLM_SFT["2. Supervised Fine-Tuning (SFT)"]
-        Pairs["Authentic Cross-Norm Bitext<br/>(Wikidata QID Aligned)"] --> TransDialogues["Bidirectional Translation:<br/>Nark <--> Tarask"]
-        Inv --> ZeroDist["Zero-Distance Identity Pairs (18%):<br/>User: Перакладзі на тарашкевіцу: {inv}<br/>Assistant: {inv} (Unchanged!)"]
+        Pairs["Authentic Cross-Norm Bitext<br/>(Wikidata QID Aligned)"] --> TransDialogues["Bidirectional Translation:<br/>Nark to/from Tarask"]
+        Inv --> ZeroDist["Zero-Distance Identity Pairs (18%):<br/>User: Adapt to Taraskievica: text<br/>Assistant: text (Unchanged!)"]
         TransDialogues & ZeroDist --> SFTOut["sft_translations.parquet<br/>(Zero Tag-Leakage Raw Text)"]
     end
 
     subgraph LLM_DPO["3. DPO Alignment (Chimera Penalty)"]
-        Chimera --> NegPrompt["Prompt: Напішы на літаратурнай мове<br/>rejected: {chimera}"]
-        Nark & Taras --> PosPrompt["chosen: {authentic_text}"]
+        Chimera --> NegPrompt["Prompt: Write in standard Belarusian<br/>rejected: chimera_sample"]
+        Nark & Taras --> PosPrompt["chosen: authentic_literature"]
         NegPrompt & PosPrompt --> DPOOut["dpo_alignment.parquet<br/>(5,193 preference pairs, 1.8 MB)"]
     end
 
