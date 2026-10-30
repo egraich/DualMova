@@ -1,13 +1,16 @@
 """
-DualMova — Discriminative Classifier Test Suite
+DualMova — Discriminative Classifier Test Suite (v3.0 Architecture)
 =============================================================================
 Automated test suite verifying the phonological decision cascades,
-closed morphemic seam grammars, loanword matrices, and Bayesian document-prior
-inheritance across Belarusian orthographic standards.
+closed morphemic seam grammars, loanword matrices, Empirical Bayes document-prior
+inheritance, bidirectional Laplace context field, and certified invariant core.
 """
 
 import sys
 from pathlib import Path
+
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 sys.path.insert(0, str(Path(__file__).parent))
 from ortho_router import DualMovaOrthographyClassifier, RouteResult
@@ -24,28 +27,31 @@ def run_tests():
         # 3. Valid soft-sign occurrences in Narkamaŭka (Morphological seams)
         ("Вядомы беларускі пісьменнік напісаў новае пісьмо, дзе распавёў пра сваю просьбу і сустрэчу з людзьмі.", "nark"),
         ("Станьце тут, калі ласка, і паглядзіце на гэтае дзіўнае зацьменне сонца.", "nark"),
-        # 4. Neutral phrases across both standards (Pre-hard neutralization & etymological stems)
-        ("Бацька і дзядзька пайшлі на пакос, дзе была добрая касьба.", "rejected"),
-        ("У студзеньскі вечар дзеці гулялі на вуліцы і нешта шукалі, бо хтосьці пакінуў там цацку.", "rejected"),
+        # 4. Neutral phrases across both standards (Pre-hard neutralization & etymological stems -> Certified Invariant Core)
+        ("Бацька і дзядзька пайшлі на пакос, дзе была добрая касьба.", "invariant"),
+        ("У студзеньскі вечар дзеці гулялі на вуліцы і нешта шукалі, бо хтосьці пакінуў там цацку.", "invariant"),
         # 5. Loanword phonetic contrasts (European vocabulary, lateral softening)
         ("План развіцця горада Мінска быў зацверджаны ў новай сістэме.", "nark"),
         ("Плян разьвіцьця гораду Менску быў зацьверджаны ў новай сыстэме.", "tarask"),
-        # 6. Noise, Russian script intrusion, and Trasyanka
+        # 6. Noise, Russian script intrusion, Russian phonology, and Trasyanka
         ("Этот текст написан на русском языке и должен быть отброшен.", "rejected"),
+        ("Государство должно уважать права каждого человека в нашей стране.", "rejected"),
+        ("Мама мыла раму, а папа делал новый деревянный стол в комнате.", "rejected"),
         ("Ён пашол у магазін і сказаў, што толька еслі патаму што робітся работа.", "rejected"),
-        # 7. Short neutral dialogue (rejected without document context)
-        ("— Добрага ранку, матуля! — сказаў Янка.", "rejected"),
+        ("Мы чакалі аўтобус цэлы час, но ён так і не прыехаў на нашу астаноўку.", "rejected"),
+        # 7. Short neutral dialogue (Certified Invariant Core when isolated)
+        ("— Добрага ранку, матуля! — сказаў Янка.", "invariant"),
         # 8. Stress-test: 3rd-person verbs on -ае + neuter nouns (must be nark, not falsely tarask)
         ("Сучаснае пакаленне чытае кнігі, вывучае дакументы і шукае праўды.", "nark"),
-        # 9. Stress-test: Invariant post-alveolar sibilants жж/чч/шш and suffixal -нны (must be neutral/rejected without markers)
-        ("Уздоўж узбярэжжа раскінулася зацішша, ноччу ваенны патруль вёз збожжа і тонны грузу.", "rejected"),
+        # 9. Stress-test: Unmarked assimilation (узбярэжжа vs узьбярэжжа -> nark)
+        ("Уздоўж узбярэжжа раскінулася зацішша, ноччу ваенны патруль вёз збожжа і тонны грузу.", "nark"),
         # 10. Stress-test: Classical Taraškievica with intra-word apostrophe and soft geminate
         ("Разглядаецца праблема аб’яднаньня, дзе адбываецца новае вясельле і адчыняюцца дзьверы.", "tarask"),
         # 11. Stress-test: Pre-stressed unstressed 'не' and 'без' in Classical Taraškievica (BKP-2005 Chapter 7)
         ("Яна не магла і не хацела заставацца без вады і без дапамогі, але сьнег засыпаў усе сьцежкі.", "tarask"),
     ]
 
-    print("=== DUALMOVA DISCRIMINATIVE CLASSIFIER TEST SUITE ===\n")
+    print("=== DUALMOVA DISCRIMINATIVE CLASSIFIER TEST SUITE (v3.0) ===\n")
     all_passed = True
     for text, expected in test_cases:
         res = clf.classify(text)
@@ -58,7 +64,7 @@ def run_tests():
         print(f"{mark} Expected: {expected:10} | Obtained: {res.label:10} (conf={conf:.3f})")
         print(f"       Text: {text[:65]}...")
         if reason:
-            print(f"       Rejection Reason: {reason}")
+            print(f"       Reason: {reason}")
         if res.metrics.get("features"):
             print(f"       Features: {res.metrics.get('features')}")
         print()
@@ -75,7 +81,7 @@ def run_tests():
         print("[FAIL] Prior inheritance failure!")
         all_passed = False
 
-    # Code-Switching Citation Protection Test (Confidence-Gated Decay):
+    # Code-Switching Citation Protection Test (Conflict-Aware Gated Decay):
     print("\n--- Code-Switching Embedded Citation Protection Test ---")
     doc_log_odds_tarask = +3.8  # Enclosing document is Taraskievica book
     quote_nark = "Дзяржаўныя органы забяспечваюць развіццё і функцыянаванне беларускай мовы ва ўсіх сферах грамадскага жыцця."

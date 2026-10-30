@@ -52,7 +52,7 @@ PARQUET_SCHEMA = pa.schema([
     pa.field("id", pa.string()),
     pa.field("text", pa.string()),
     pa.field("text_raw", pa.string()),
-    pa.field("orthography", pa.string()),      # "nark" | "tarask"
+    pa.field("orthography", pa.string()),      # "nark" | "tarask" | "invariant"
     pa.field("genre", pa.string()),            # "prose" | "poetry" | "folklore"
     pa.field("author", pa.string()),
     pa.field("author_slug", pa.string()),
@@ -136,6 +136,7 @@ def generate_dataset_card(stats: dict) -> str:
     total = stats.get("total", 0)
     nark = stats.get("nark", 0)
     tarask = stats.get("tarask", 0)
+    invariant = stats.get("invariant", 0)
     prose = stats.get("prose", 0)
     poetry = stats.get("poetry", 0)
     folklore = stats.get("folklore", 0)
@@ -186,6 +187,10 @@ configs:
   data_files:
     - split: train
       path: tarask/data.parquet
+- config_name: invariant
+  data_files:
+    - split: train
+      path: invariant/data.parquet
 - config_name: contrastive
   data_files:
     - split: train
@@ -205,6 +210,7 @@ rigorous classification and tagging across the language's two codified orthograp
 |-----|----------------------|-------------|
 | `<orth_nark>` | Official Standard (Narkamaŭka / NKBM-2008) | Official standard of the Republic of Belarus |
 | `<orth_taras>` | Classical Standard (Taraškievica / BKP-2005) | Classical orthography (Branisłaŭ Taraškievič tradition) |
+| `<orth_invariant>` | Certified Invariant Core | Common invariant core valid across both orthographies |
 
 ## Dataset Statistics
 
@@ -213,6 +219,7 @@ rigorous classification and tagging across the language's two codified orthograp
 | **Total Segments** | {total:,} |
 | Official Standard (`nark`) | {nark:,} ({nark/max(total,1)*100:.1f}%) |
 | Classical Standard (`tarask`) | {tarask:,} ({tarask/max(total,1)*100:.1f}%) |
+| Certified Invariant (`invariant`) | {invariant:,} ({invariant/max(total,1)*100:.1f}%) |
 | Prose Paragraphs | {prose:,} |
 | Poetry Strophes | {poetry:,} |
 | Folklore & Mythology | {folklore:,} |
@@ -289,6 +296,7 @@ def main():
     folklore = [r for r in all_records if r.get("genre") == "folklore"]
     nark = [r for r in all_records if r.get("orthography") == "nark"]
     tarask = [r for r in all_records if r.get("orthography") == "tarask"]
+    invariant = [r for r in all_records if r.get("orthography") == "invariant"]
     contrastive = [r for r in all_records if r.get("pair_id")]
 
     log.info("Serializing Parquet splits...")
@@ -298,6 +306,7 @@ def main():
     to_parquet(folklore,     EXPORT_DIR / "folklore",    "folklore")
     to_parquet(nark,         EXPORT_DIR / "nark",        "nark")
     to_parquet(tarask,       EXPORT_DIR / "tarask",      "tarask")
+    to_parquet(invariant,    EXPORT_DIR / "invariant",   "invariant")
     to_parquet(contrastive,  EXPORT_DIR / "contrastive", "contrastive")
 
     stats = {
@@ -307,6 +316,7 @@ def main():
         "folklore": len(folklore),
         "nark": len(nark),
         "tarask": len(tarask),
+        "invariant": len(invariant),
         "contrastive_pairs": len(contrastive),
     }
 
@@ -324,6 +334,7 @@ def main():
     log.info("  Total records:         %d", stats["total"])
     log.info("  Narkamaŭka:            %d", stats["nark"])
     log.info("  Taraškievica:          %d", stats["tarask"])
+    log.info("  Invariant Core:        %d", stats["invariant"])
     log.info("  Prose:                 %d", stats["prose"])
     log.info("  Poetry:                %d", stats["poetry"])
     log.info("  Folklore:              %d", stats["folklore"])

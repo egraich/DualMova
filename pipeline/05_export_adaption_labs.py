@@ -103,6 +103,25 @@ def export_sft_translations(records: list[dict], out_dir: Path):
                 "pair_id": pid,
             })
 
+    # Zero-Distance Identity Pairs (15-20% of SFT corpus to prevent hypercorrection hallucinations)
+    inv_records = [r for r in records if r.get("orthography") == "invariant" and r.get("text_raw")]
+    if inv_records and sft_rows:
+        target_inv_count = min(len(inv_records), max(int(len(sft_rows) * 0.18), 1))
+        sampled_inv = rng.sample(inv_records, target_inv_count) if target_inv_count < len(inv_records) else inv_records
+        for inv_rec in sampled_inv:
+            inv_text = inv_rec["text_raw"].strip()
+            # Ask for translation to either norm; the correct target is identically unchanged!
+            p_inv = rng.choice(PROMPTS_TO_TARASK if rng.random() < 0.5 else PROMPTS_TO_NARK).format(text=inv_text)
+            sft_rows.append({
+                "messages": [
+                    {"role": "user", "content": p_inv},
+                    {"role": "assistant", "content": inv_text},
+                ],
+                "direction": "identity_invariant",
+                "pair_id": f"inv_{inv_rec.get('id', '')}",
+            })
+        log.info("Integrated %d Zero-Distance identity invariant pairs (%.1f%% of SFT)", target_inv_count, target_inv_count / max(len(sft_rows), 1) * 100)
+
     log.info("Constructed %d SFT dialogues from %d contrastive pairs", len(sft_rows), len(pairs))
     rng.shuffle(sft_rows)
 
@@ -156,7 +175,12 @@ def export_packed_pretrain(records: list[dict], out_dir: Path, target_chars: int
 
             # Orthography boundary or token length threshold triggers block serialization
             if (current_orth and orth != current_orth) or (current_len + len(t) > target_chars and current_block):
-                norm_label = "Тарашкевіца" if current_orth == "tarask" else "Наркамаўка"
+                if current_orth == "tarask":
+                    norm_label = "Тарашкевіца"
+                elif current_orth == "invariant":
+                    norm_label = "Агульны інварыянт"
+                else:
+                    norm_label = "Наркамаўка"
                 header = f"[Правапіс: {norm_label} | Твор: {current_title} | Аўтар: {current_author}]\n\n"
                 full_text = header + "\n\n".join(current_block)
                 packed_records.append({
@@ -176,7 +200,12 @@ def export_packed_pretrain(records: list[dict], out_dir: Path, target_chars: int
             current_len += len(t)
 
         if current_block:
-            norm_label = "Тарашкевіца" if current_orth == "tarask" else "Наркамаўка"
+            if current_orth == "tarask":
+                norm_label = "Тарашкевіца"
+            elif current_orth == "invariant":
+                norm_label = "Агульны інварыянт"
+            else:
+                norm_label = "Наркамаўка"
             header = f"[Правапіс: {norm_label} | Твор: {current_title} | Аўтар: {current_author}]\n\n"
             full_text = header + "\n\n".join(current_block)
             packed_records.append({
@@ -204,8 +233,67 @@ def export_packed_pretrain(records: list[dict], out_dir: Path, target_chars: int
         log.info("Saved Parquet to %s (size: %.2f MB)", parquet_path, parquet_path.stat().st_size / 1e6)
 
 
+def export_dpo_split(records: list[dict], rejected_path: Path, out_dir: Path):
+    """
+    Generates Direct Preference Optimization (DPO) preference pairs:
+      {"prompt": ..., "chosen": text_authentic, "rejected": text_chimera_or_corrupted}
+    Trains the LLM to strictly penalize orthographic chimeras and cross-norm leakage.
+    """
+    log.info("--- Generating DPO Chimera-Penalty Split ---")
+    if not rejected_path.exists():
+        log.warning("Rejected file %s not found. Skipping DPO export.", rejected_path)
+        return
+
+    chimeras = []
+    with open(rejected_path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = json.loads(line)
+                if rec.get("reject_reason") == "REJECT_ORTHOGRAPHIC_CHIMERA":
+                    txt = rec.get("text_raw", "").strip()
+                    if txt:
+                        chimeras.append(txt)
+            except json.JSONDecodeError:
+                continue
+
+    log.info("Found %d rejected chimera candidates for DPO negative samples", len(chimeras))
+    if not chimeras:
+        return
+
+    rng = random.Random(42)
+    contrastive_samples = [r.get("text_raw", "").strip() for r in records if r.get("pair_id") and r.get("text_raw")]
+    if not contrastive_samples:
+        contrastive_samples = [r.get("text_raw", "").strip() for r in records if r.get("text_raw")]
+
+    dpo_rows = []
+    for chimera in chimeras:
+        chosen = rng.choice(contrastive_samples)
+        prompt = "Напішы ці адрэдагуй тэкст на бездакорнай беларускай літаратурнай мове:"
+        dpo_rows.append({
+            "prompt": prompt,
+            "chosen": chosen,
+            "rejected": chimera,
+            "negative_type": "orthographic_chimera",
+        })
+
+    rng.shuffle(dpo_rows)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dpo_path = out_dir / "dpo_alignment.jsonl"
+    with open(dpo_path, "w", encoding="utf-8") as f:
+        for r in dpo_rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    log.info("Saved DPO dataset to %s (%d pairs, size: %.2f MB)", dpo_path, len(dpo_rows), dpo_path.stat().st_size / 1e6)
+
+    if PA_AVAILABLE:
+        df = pd.DataFrame(dpo_rows)
+        parquet_path = out_dir / "dpo_alignment.parquet"
+        df.to_parquet(parquet_path, compression="zstd", index=False)
+        log.info("Saved DPO Parquet to %s (size: %.2f MB)", parquet_path, parquet_path.stat().st_size / 1e6)
+
+
 def main():
     jsonl_path = PROCESSED_DIR / "dataset.jsonl"
+    rejected_path = PROCESSED_DIR / "rejected.jsonl"
     if not jsonl_path.exists():
         log.error("File %s not found.", jsonl_path)
         return
@@ -224,6 +312,7 @@ def main():
     log.info("Loaded %d records.", len(records))
     export_sft_translations(records, EXPORT_DIR)
     export_packed_pretrain(records, EXPORT_DIR)
+    export_dpo_split(records, rejected_path, EXPORT_DIR)
     log.info("Serialization for cloud training completed successfully.")
 
 

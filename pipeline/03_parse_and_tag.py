@@ -443,6 +443,7 @@ def main():
         "chars_total": 0,
         "segments_nark": 0,
         "segments_tarask": 0,
+        "segments_invariant": 0,
         "segments_rejected": 0,
         "augmented_pairs": 0,
         "poetry": 0,
@@ -561,8 +562,10 @@ def main():
 
                 if result.label == "nark":
                     stats["segments_nark"] += 1
-                else:
+                elif result.label == "tarask":
                     stats["segments_tarask"] += 1
+                elif result.label == "invariant":
+                    stats["segments_invariant"] += 1
 
             if stats["files_processed"] % 100 == 0:
                 t_cur = time.perf_counter() - t_start
@@ -609,6 +612,7 @@ def main():
     log.info("  Total characters:      %s", f"{stats['chars_total']:,}")
     log.info("  Official (Narkamaŭka): %d (%.1f%%)", stats["segments_nark"], stats["segments_nark"] / max(stats["segments_total"], 1) * 100)
     log.info("  Classical (Taraškievica): %d (%.1f%%)", stats["segments_tarask"], stats["segments_tarask"] / max(stats["segments_total"], 1) * 100)
+    log.info("  Invariant Core:        %d (%.1f%%)", stats.get("segments_invariant", 0), stats.get("segments_invariant", 0) / max(stats["segments_total"], 1) * 100)
     log.info("  Rejected (Noise):      %d (%.1f%%)", stats["segments_rejected"], stats["segments_rejected"] / max(stats["segments_total"] + stats["segments_rejected"], 1) * 100)
     log.info("  Poetry strophes:       %d", stats["poetry"])
     log.info("  Prose paragraphs:      %d", stats["prose"])
